@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-counselor-50 to-primary-50 min-h-screen;
+  }
+}
+
+@layer components {
+  .chat-bubble {
+    @apply max-w-xs lg:max-w-md px-4 py-2 rounded-lg shadow-sm;
+  }
+  
+  .user-bubble {
+    @apply bg-primary-500 text-white ml-auto;
+  }
+  
+  .counselor-bubble {
+    @apply bg-white text-gray-800 border border-gray-200;
+  }
+  
+  .typing-indicator {
+    @apply flex space-x-1 px-4 py-2;
+  }
+  
+  .typing-dot {
+    @apply w-2 h-2 bg-gray-400 rounded-full animate-bounce;
+  }
+} 
