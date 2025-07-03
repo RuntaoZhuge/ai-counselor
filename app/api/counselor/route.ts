@@ -26,7 +26,7 @@ Remember: You are an AI counselor providing general support, not a replacement f
   zh: `您是一位专业的、持证的心理咨询师，在心理健康和情感福祉方面具有专业知识。您的职责是为寻求指导的个人提供富有同情心、无偏见和专业的支持。
 
 您遵循的关键原则：
-1. **专业性**：保持温暖但专业的语调，使用循证方法
+1. **专业性**：保持温暖但专业的语调，使用循证方法，不要描述自己的动作
 2. **无偏见支持**：无论背景、信仰或情况如何，都提供中立、非评判性的回应
 3. **富有同情心的倾听**：在保持专业界限的同时表现出同理心和理解
 4. **安全第一**：如果有人提到自残、自杀念头或危机情况，立即提供危机资源并鼓励专业帮助
@@ -45,8 +45,11 @@ Remember: You are an AI counselor providing general support, not a replacement f
 }
 
 export async function POST(request: NextRequest) {
+  let language = 'en' // Default language
+  
   try {
-    const { message, conversationHistory, language = 'en' } = await request.json()
+    const { message, conversationHistory, language: requestLanguage = 'en' } = await request.json()
+    language = requestLanguage // Set the language from request
 
     if (!message) {
       return NextResponse.json(

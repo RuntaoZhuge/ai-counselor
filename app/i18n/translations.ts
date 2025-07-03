@@ -33,7 +33,7 @@ export const translations = {
   zh: {
     title: "AI 心理咨询师",
     subtitle: "专业且富有同情心的支持",
-    welcome: "您好，我是您的专业心理咨询师。我在这里为您提供专业、富有同情心且无偏见的支持。您今天感觉如何？",
+    welcome: "您好，我是您的专业心理咨询师。我在这里为您提供专业的支持。您今天感觉如何？",
     placeholder: "分享您的想法...",
     send: "发送",
     features: {
