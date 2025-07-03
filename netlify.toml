@@ -8,4 +8,5 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Remove the functions and redirects sections as the plugin handles this automatically 
+[functions]
+  timeout = 30 

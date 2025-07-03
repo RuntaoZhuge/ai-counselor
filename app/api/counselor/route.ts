@@ -116,35 +116,56 @@ export async function POST(request: NextRequest) {
       { role: 'user', content: message }
     ]
 
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'deepseek-reasoner',
-        messages: messages,
-        max_tokens: 300,
-        temperature: 0.7,
-        top_p: 0.9
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+
+    try {
+      const response = await fetch(DEEPSEEK_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'deepseek-reasoner',
+          messages: messages,
+          max_tokens: 300,
+          temperature: 0.7,
+          top_p: 0.9
+        }),
+        signal: controller.signal
       })
-    })
+      
+      clearTimeout(timeoutId)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('DeepSeek API error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        })
+        throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`)
+      }
+      
+      const data = await response.json()
+      const counselorResponse = data.choices[0]?.message?.content
 
-    if (!response.ok) {
-      throw new Error(`DeepSeek API error: ${response.status}`)
+      if (!counselorResponse) {
+        throw new Error('No response from DeepSeek API')
+      }
+
+      return NextResponse.json({
+        response: counselorResponse
+      })
+      
+    } catch (fetchError) {
+      clearTimeout(timeoutId)
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timeout - DeepSeek API took too long to respond')
+      }
+      throw fetchError
     }
-
-    const data = await response.json()
-    const counselorResponse = data.choices[0]?.message?.content
-
-    if (!counselorResponse) {
-      throw new Error('No response from DeepSeek API')
-    }
-
-    return NextResponse.json({
-      response: counselorResponse
-    })
 
   } catch (error) {
     console.error('Counselor API error:', error)
