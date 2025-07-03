@@ -47,6 +47,15 @@ Remember: You are an AI counselor providing general support, not a replacement f
 export async function POST(request: NextRequest) {
   let language = 'en' // Default language
   
+  // Check if API key is configured
+  if (!process.env.DEEPSEEK_API_KEY) {
+    console.error('DEEPSEEK_API_KEY is not configured')
+    return NextResponse.json(
+      { error: 'API key not configured' },
+      { status: 500 }
+    )
+  }
+  
   try {
     const { message, conversationHistory, language: requestLanguage = 'en' } = await request.json()
     language = requestLanguage // Set the language from request
