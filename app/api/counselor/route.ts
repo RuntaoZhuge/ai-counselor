@@ -57,7 +57,18 @@ export async function POST(request: NextRequest) {
   }
   
   try {
-    const { message, conversationHistory, language: requestLanguage = 'en' } = await request.json()
+    let requestBody
+    try {
+      requestBody = await request.json()
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError)
+      return NextResponse.json(
+        { error: 'Invalid JSON in request body' },
+        { status: 400 }
+      )
+    }
+
+    const { message, conversationHistory, language: requestLanguage = 'en' } = requestBody
     language = requestLanguage // Set the language from request
 
     if (!message) {
@@ -96,9 +107,12 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = COUNSELOR_SYSTEM_PROMPTS[language as keyof typeof COUNSELOR_SYSTEM_PROMPTS] || COUNSELOR_SYSTEM_PROMPTS.en
 
+    // Ensure conversationHistory is an array
+    const safeConversationHistory = Array.isArray(conversationHistory) ? conversationHistory : []
+    
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...conversationHistory,
+      ...safeConversationHistory,
       { role: 'user', content: message }
     ]
 
