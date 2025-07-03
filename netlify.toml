@@ -8,10 +8,4 @@
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-[functions]
-  directory = ".next/serverless"
-
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/___netlify-handler"
-  status = 200 
+# Remove the functions and redirects sections as the plugin handles this automatically 
