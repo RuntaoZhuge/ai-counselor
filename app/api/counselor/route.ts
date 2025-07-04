@@ -16,10 +16,13 @@ Key principles you follow:
 
 Your responses should be:
 - Warm and empathetic but professional
-- 2-4 sentences in length (concise but helpful)
+- 3-5 sentences in length (provide complete, helpful responses)
 - Focused on the person's emotional well-being
 - Free from judgment or bias
 - Encouraging of professional help when needed
+- Complete and well-formed (never cut off mid-sentence)
+
+IMPORTANT: Always provide complete, finished responses. Never leave sentences or thoughts incomplete.
 
 Remember: You are an AI counselor providing general support, not a replacement for professional mental health care.`,
 
@@ -36,10 +39,13 @@ Remember: You are an AI counselor providing general support, not a replacement f
 
 您的回应应该是：
 - 温暖且富有同理心但专业
-- 2-4句话长度（简洁但有用）
+- 3-5句话长度（提供完整、有用的回应）
 - 专注于个人的情感福祉
 - 无判断或偏见
 - 在需要时鼓励专业帮助
+- 完整且结构良好（永远不要中途切断句子）
+
+重要提示：始终提供完整、完成的回应。永远不要留下不完整的句子或想法。
 
 记住：您是一位提供一般性支持的AI咨询师，不是专业心理健康护理的替代品。`
 }
@@ -117,61 +123,144 @@ export async function POST(request: NextRequest) {
     ]
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 8000) // 8 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // Increased to 15 second timeout
 
-    try {
-      const response = await fetch(DEEPSEEK_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: 'deepseek-reasoner',
-          messages: messages,
-          max_tokens: 300,
-          temperature: 0.7,
-          top_p: 0.9
-        }),
-        signal: controller.signal
-      })
-      
-      clearTimeout(timeoutId)
-      
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('DeepSeek API error details:', {
-          status: response.status,
-          statusText: response.statusText,
-          body: errorText
+    // Retry mechanism for truncated responses
+    let retryCount = 0
+    const maxRetries = 1
+
+    while (retryCount <= maxRetries) {
+      try {
+        const response = await fetch(DEEPSEEK_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'deepseek-reasoner',
+            messages: messages,
+            max_tokens: retryCount === 0 ? 500 : 800, // Increase tokens on retry
+            temperature: 0.7,
+            top_p: 0.9,
+            stream: false // Ensure we get complete responses
+          }),
+          signal: controller.signal
         })
-        throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`)
-      }
-      
-      const data = await response.json()
-      const counselorResponse = data.choices[0]?.message?.content
+        
+        clearTimeout(timeoutId)
+        
+        if (!response.ok) {
+          const errorText = await response.text()
+          console.error('DeepSeek API error details:', {
+            status: response.status,
+            statusText: response.statusText,
+            body: errorText
+          })
+          throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`)
+        }
+        
+        const data = await response.json()
+        
+        // Check if response was completed or truncated
+        const finishReason = data.choices[0]?.finish_reason
+        const usage = data.usage // Log token usage for monitoring
+        
+        console.log('DeepSeek API response details:', {
+          finishReason,
+          promptTokens: usage?.prompt_tokens,
+          completionTokens: usage?.completion_tokens,
+          totalTokens: usage?.total_tokens,
+          maxTokens: retryCount === 0 ? 500 : 800
+        })
+        
+        if (finishReason === 'length' && retryCount < maxRetries) {
+          console.warn('DeepSeek response was truncated, retrying with higher token limit')
+          retryCount++
+          continue // Retry with higher token limit
+        }
+        
+        const counselorResponse = data.choices[0]?.message?.content
 
-      if (!counselorResponse) {
-        throw new Error('No response from DeepSeek API')
-      }
+        if (!counselorResponse) {
+          throw new Error('No response from DeepSeek API')
+        }
 
-      return NextResponse.json({
-        response: counselorResponse
-      })
-      
-    } catch (fetchError) {
-      clearTimeout(timeoutId)
-      if (fetchError.name === 'AbortError') {
-        throw new Error('Request timeout - DeepSeek API took too long to respond')
+        // Check if response seems incomplete (ends abruptly)
+        const trimmedResponse = counselorResponse.trim()
+        if (trimmedResponse.length < 10) {
+          throw new Error('Response too short - likely incomplete')
+        }
+
+        // Check for common incomplete response patterns
+        const lastChar = trimmedResponse.slice(-1)
+        const lastSentence = trimmedResponse.split('.').pop()?.trim() || ''
+        
+        // Check if response ends with ellipsis, incomplete sentence, or common incomplete patterns
+        if (trimmedResponse.endsWith('...') || 
+            trimmedResponse.endsWith('..') || 
+            trimmedResponse.endsWith('…') ||
+            (lastChar !== '.' && lastChar !== '!' && lastChar !== '?' && lastChar !== '"' && lastChar !== "'") ||
+            lastSentence.length > 0 && lastSentence.length < 5) {
+          throw new Error('Response appears to be incomplete - ends abruptly')
+        }
+
+        // Additional checks for Chinese responses
+        if (language === 'zh') {
+          const chineseLastChar = trimmedResponse.slice(-1)
+          const chineseLastSentence = trimmedResponse.split('。').pop()?.trim() || ''
+          
+          // Check for incomplete Chinese sentences
+          if (trimmedResponse.endsWith('...') || 
+              trimmedResponse.endsWith('..') || 
+              trimmedResponse.endsWith('…') ||
+              (chineseLastChar !== '。' && chineseLastChar !== '！' && chineseLastChar !== '？' && chineseLastChar !== '"' && chineseLastChar !== '"') ||
+              chineseLastSentence.length > 0 && chineseLastSentence.length < 3) {
+            throw new Error('Chinese response appears to be incomplete - ends abruptly')
+          }
+        }
+
+        // If we get here, we have a valid response
+        return NextResponse.json({
+          response: counselorResponse
+        })
+        
+      } catch (fetchError) {
+        clearTimeout(timeoutId)
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timeout - DeepSeek API took too long to respond')
+        }
+        
+        // If this is the last retry, throw the error
+        if (retryCount >= maxRetries) {
+          throw fetchError
+        }
+        
+        // Otherwise, retry
+        retryCount++
+        console.warn(`Retrying DeepSeek API call (attempt ${retryCount}/${maxRetries + 1})`)
       }
-      throw fetchError
     }
 
   } catch (error) {
     console.error('Counselor API error:', error)
-    const errorResponse = language === 'zh'
-      ? "抱歉，我现在连接有问题。请稍后再试，或考虑联系人类咨询师或心理健康专业人士获得即时支持。"
-      : "I'm sorry, I'm having trouble connecting right now. Please try again in a moment, or consider reaching out to a human counselor or mental health professional for immediate support."
+    
+    // Provide more specific error messages based on the error type
+    let errorResponse: string
+    
+    if (error.message.includes('truncated') || error.message.includes('incomplete')) {
+      errorResponse = language === 'zh'
+        ? "抱歉，我的回应似乎不完整。请重新发送您的消息，我会尽力提供完整的回应。"
+        : "I'm sorry, my response seems incomplete. Please send your message again, and I'll do my best to provide a complete response."
+    } else if (error.message.includes('timeout')) {
+      errorResponse = language === 'zh'
+        ? "抱歉，响应时间过长。请稍后再试，或考虑联系人类咨询师获得即时支持。"
+        : "I'm sorry, the response is taking too long. Please try again in a moment, or consider reaching out to a human counselor for immediate support."
+    } else {
+      errorResponse = language === 'zh'
+        ? "抱歉，我现在连接有问题。请稍后再试，或考虑联系人类咨询师或心理健康专业人士获得即时支持。"
+        : "I'm sorry, I'm having trouble connecting right now. Please try again in a moment, or consider reaching out to a human counselor or mental health professional for immediate support."
+    }
     
     return NextResponse.json(
       { response: errorResponse },
