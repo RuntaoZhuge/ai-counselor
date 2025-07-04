@@ -192,31 +192,25 @@ export async function POST(request: NextRequest) {
           throw new Error('Response too short - likely incomplete')
         }
 
-        // Check for common incomplete response patterns
+        // Check for common incomplete response patterns - only for obvious cases
         const lastChar = trimmedResponse.slice(-1)
-        const lastSentence = trimmedResponse.split('.').pop()?.trim() || ''
         
-        // Check if response ends with ellipsis, incomplete sentence, or common incomplete patterns
+        // Only flag as incomplete if it ends with obvious incomplete patterns
         if (trimmedResponse.endsWith('...') || 
             trimmedResponse.endsWith('..') || 
-            trimmedResponse.endsWith('…') ||
-            (lastChar !== '.' && lastChar !== '!' && lastChar !== '?' && lastChar !== '"' && lastChar !== "'") ||
-            lastSentence.length > 0 && lastSentence.length < 5) {
-          throw new Error('Response appears to be incomplete - ends abruptly')
+            trimmedResponse.endsWith('…')) {
+          throw new Error('Response appears to be incomplete - ends with ellipsis')
         }
 
-        // Additional checks for Chinese responses
+        // Additional checks for Chinese responses - only for obvious incomplete patterns
         if (language === 'zh') {
           const chineseLastChar = trimmedResponse.slice(-1)
-          const chineseLastSentence = trimmedResponse.split('。').pop()?.trim() || ''
           
-          // Check for incomplete Chinese sentences
+          // Only flag Chinese responses as incomplete if they end with ellipsis
           if (trimmedResponse.endsWith('...') || 
               trimmedResponse.endsWith('..') || 
-              trimmedResponse.endsWith('…') ||
-              (chineseLastChar !== '。' && chineseLastChar !== '！' && chineseLastChar !== '？' && chineseLastChar !== '"' && chineseLastChar !== '"') ||
-              chineseLastSentence.length > 0 && chineseLastSentence.length < 3) {
-            throw new Error('Chinese response appears to be incomplete - ends abruptly')
+              trimmedResponse.endsWith('…')) {
+            throw new Error('Chinese response appears to be incomplete - ends with ellipsis')
           }
         }
 
